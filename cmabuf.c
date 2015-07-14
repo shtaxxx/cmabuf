@@ -105,7 +105,7 @@ static ssize_t cmabuf_set_ ## __attr_name(struct device *dev, struct device_attr
     unsigned long value;  \
     struct cmabuf_driver_data* this = dev_get_drvdata(dev);                  \
     if (0 != mutex_lock_interruptible(&this->sem)){return -ERESTARTSYS;}     \
-    if (0 != (status = strict_strtoul(buf, 10, &value))) {     goto failed;} \
+    if (0 != (status = kstrtoul(buf, 10, &value))) {     goto failed;} \
     if ((value < __min) || (__max < value)) {status = -EINVAL; goto failed;} \
     if (0 != (status = __pre_action )) {                       goto failed;} \
     this->__attr_name = value;                                               \
@@ -117,19 +117,37 @@ static ssize_t cmabuf_set_ ## __attr_name(struct device *dev, struct device_attr
 }
 
 DEF_ATTR_SHOW(size      , "%d\n"   , this->size      );
-DEF_ATTR_SHOW(phys_addr , "0x%lx\n", this->phys_addr );
+DEF_ATTR_SHOW(phys_addr , "0x%lx\n", (long unsigned int)this->phys_addr );
 #if (CMABUF_DEBUG == 1)
 DEF_ATTR_SHOW(debug_vma, "%d\n"    , this->debug_vma);
 DEF_ATTR_SET( debug_vma            , 0, 1, 0, 0);
 #endif
 
-static const struct device_attribute cmabuf_device_attrs[] = {
+static struct device_attribute cmabuf_device_attrs[] = {
   __ATTR(size      , 0644, cmabuf_show_size      , NULL),
   __ATTR(phys_addr , 0644, cmabuf_show_phys_addr , NULL),
 #if (CMABUF_DEBUG == 1)
   __ATTR(debug_vma , 0644, cmabuf_show_debug_vma , cmabuf_set_debug_vma),
 #endif
   __ATTR_NULL,
+};
+
+static struct attribute *cmabuf_attrs[] = {
+  &(cmabuf_device_attrs[0].attr),
+  &(cmabuf_device_attrs[1].attr),
+#if (CMABUF_DEBUG == 1)
+  &(cmabuf_device_attrs[2].attr),
+#endif
+  NULL,
+};
+
+static struct attribute_group cmabuf_attr_group = {
+  .attrs = cmabuf_attrs,
+};
+
+static const struct attribute_group *cmabuf_attr_groups[] = {
+  &cmabuf_attr_group,
+  NULL
 };
 
 /**
@@ -173,7 +191,7 @@ static int cmabuf_driver_vma_fault(struct vm_area_struct* vma, struct vm_fault* 
     unsigned long available_size    = this->size  - offset;
 
     if (CMABUF_DEBUG_CHECK(this, debug_vma))
-        dev_info(this->device, "vma_fault(virt_addr=0x%lx, phys_addr=0x%lx)\n", vmf->virtual_address, phys_addr);
+        dev_info(this->device, "vma_fault(virt_addr=0x%lx, phys_addr=0x%lx)\n", (long unsigned int)vmf->virtual_address, phys_addr);
 
     if (request_size > available_size) 
         return VM_FAULT_SIGBUS;
@@ -381,7 +399,7 @@ static struct cmabuf_driver_data* cmabuf_driver_create(int minor, unsigned int s
     dev_info(this->device, "driver installed\n");
     dev_info(this->device, "major number   = %d\n"    , MAJOR(this->device_number));
     dev_info(this->device, "minor number   = %d\n"    , MINOR(this->device_number));
-    dev_info(this->device, "phys address   = 0x%lx\n" , this->phys_addr);
+    dev_info(this->device, "phys address   = 0x%lx\n" , (long unsigned int)this->phys_addr);
     dev_info(this->device, "buffer size    = %d\n"    , this->size);
 
     return this;
@@ -584,7 +602,7 @@ static int __init cmabuf_module_init(void)
         cmabuf_sys_class = NULL;
         goto failed;
     }
-    cmabuf_sys_class->dev_attrs = cmabuf_device_attrs;
+    cmabuf_sys_class->dev_groups = cmabuf_attr_groups;
 
     CREATE_CMABUF_DRIVER(0);
     CREATE_CMABUF_DRIVER(1);

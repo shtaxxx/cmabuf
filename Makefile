@@ -1,7 +1,8 @@
+KERNEL_DIR = /home/shinya/work/zedboard_debian/sw/linux/
 obj-m := cmabuf.o
 
 all:
-	make -C /usr/src/kernel M=$(PWD) modules
+	make -C $(KERNEL_DIR) M=$(PWD) modules
 
 clean:
-	make -C /usr/src/kernel M=$(PWD) clean
+	make -C $(KERNEL_DIR) M=$(PWD) clean
